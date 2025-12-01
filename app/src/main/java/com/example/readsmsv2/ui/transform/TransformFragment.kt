@@ -1,24 +1,23 @@
 package com.example.readsmsv2.ui.transform
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.example.readsmsv2.databinding.FragmentTransformBinding
-import com.example.readsmsv2.databinding.ItemTransformBinding
-import android.net.Uri
-import android.widget.Toast
 import com.example.readsmsv2.R
+import com.example.readsmsv2.databinding.FragmentTransformBinding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,7 +40,14 @@ class TransformFragment : Fragment() {
         val root: View = binding.root
 
         val recyclerView = binding.recyclerviewTransform
-        val smsAdapter = SmsAdapter()
+
+        // 👇 adapter with click callback
+        val smsAdapter = SmsAdapter { smsGroup ->
+            // Open detail screen for this sender
+            val intent = Intent(requireContext(), SmsDetailActivity::class.java)
+            intent.putExtra("mobile", smsGroup.mobile)
+            startActivity(intent)
+        }
         recyclerView.adapter = smsAdapter
 
         if (ContextCompat.checkSelfPermission(
@@ -112,7 +118,11 @@ class TransformFragment : Fragment() {
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 val recyclerView = binding.recyclerviewTransform
-                val smsAdapter = SmsAdapter()
+                val smsAdapter = SmsAdapter { smsGroup ->
+                    val intent = Intent(requireContext(), SmsDetailActivity::class.java)
+                    intent.putExtra("mobile", smsGroup.mobile)
+                    startActivity(intent)
+                }
                 recyclerView.adapter = smsAdapter
                 loadSms(smsAdapter)
             } else {
@@ -134,12 +144,18 @@ class TransformFragment : Fragment() {
         val messageCount: Int
     )
 
-    // Adapter
-    class SmsAdapter :
-        ListAdapter<SmsGroup, SmsViewHolder>(object : DiffUtil.ItemCallback<SmsGroup>() {
-            override fun areItemsTheSame(oldItem: SmsGroup, newItem: SmsGroup) = oldItem.mobile == newItem.mobile
-            override fun areContentsTheSame(oldItem: SmsGroup, newItem: SmsGroup) = oldItem == newItem
-        }) {
+    // Adapter with click handler
+    class SmsAdapter(
+        private val onItemClick: (SmsGroup) -> Unit
+    ) : ListAdapter<SmsGroup, SmsViewHolder>(
+        object : DiffUtil.ItemCallback<SmsGroup>() {
+            override fun areItemsTheSame(oldItem: SmsGroup, newItem: SmsGroup) =
+                oldItem.mobile == newItem.mobile
+
+            override fun areContentsTheSame(oldItem: SmsGroup, newItem: SmsGroup) =
+                oldItem == newItem
+        }
+    ) {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SmsViewHolder {
             val view = LayoutInflater.from(parent.context)
@@ -175,9 +191,15 @@ class TransformFragment : Fragment() {
                 ""
             }
 
-            holder.mobileText.text = if (messageCount > 1) "$mobile ($messageCount)" else mobile
+            holder.mobileText.text =
+                if (messageCount > 1) "$mobile ($messageCount)" else mobile
             holder.messageText.text = lastMessage
             holder.timeText.text = time
+
+            // 👇 handle click on the whole card
+            holder.itemView.setOnClickListener {
+                onItemClick(smsGroup)
+            }
         }
     }
 

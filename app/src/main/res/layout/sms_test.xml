@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="8dp">
+
+    <!-- User avatar / icon -->
+    <ImageView
+        android:id="@+id/image_view_item_transform"
+        android:layout_width="@dimen/item_transform_image_length"
+        android:layout_height="@dimen/item_transform_image_length"
+        android:contentDescription="@string/image_view_item_transform_content_description"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        tools:src="@tools:sample/avatars" />
+
+    <!-- Mobile number -->
+    <TextView
+        android:id="@+id/textMobile"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        app:layout_constraintStart_toEndOf="@id/image_view_item_transform"
+        app:layout_constraintTop_toTopOf="@id/image_view_item_transform"
+        app:layout_constraintEnd_toStartOf="@id/textTime"
+        android:ellipsize="end"
+        android:singleLine="true"
+        tools:text="9876543210 (3)" />
+
+    <!-- Timestamp -->
+    <TextView
+        android:id="@+id/textTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="12sp"
+        android:textColor="#888888"
+        app:layout_constraintTop_toTopOf="@id/textMobile"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:text="Just now" />
+
+    <!-- Last message -->
+    <TextView
+        android:id="@+id/textMessage"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textColor="#444444"
+        android:ellipsize="end"
+        android:maxLines="1"
+        app:layout_constraintStart_toEndOf="@id/image_view_item_transform"
+        app:layout_constraintTop_toBottomOf="@id/textMobile"
+        app:layout_constraintEnd_toEndOf="parent"
+        tools:text="Your OTP is 123456" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

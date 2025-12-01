@@ -5,12 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.DiffUtil
@@ -27,8 +28,19 @@ class TransformFragment : Fragment() {
     private var _binding: FragmentTransformBinding? = null
     private val binding get() = _binding!!
 
-    companion object {
-        private const val PERMISSION_REQUEST_CODE = 100
+    // keep adapter as a field so we reuse it
+    private lateinit var smsAdapter: SmsAdapter
+
+    // modern permission request API
+    private val requestSmsPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        Log.d("SMS_PERM", "READ_SMS granted? $isGranted")
+        if (isGranted) {
+            loadSms()
+        } else {
+            Toast.makeText(requireContext(), "Permission denied", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreateView(
@@ -41,33 +53,29 @@ class TransformFragment : Fragment() {
 
         val recyclerView = binding.recyclerviewTransform
 
-        // 👇 adapter with click callback
-        val smsAdapter = SmsAdapter { smsGroup ->
-            // Open detail screen for this sender
+        smsAdapter = SmsAdapter { smsGroup ->
             val intent = Intent(requireContext(), SmsDetailActivity::class.java)
             intent.putExtra("mobile", smsGroup.mobile)
             startActivity(intent)
         }
         recyclerView.adapter = smsAdapter
 
-        if (ContextCompat.checkSelfPermission(
-                requireContext(),
-                Manifest.permission.READ_SMS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            ActivityCompat.requestPermissions(
-                requireActivity(),
-                arrayOf(Manifest.permission.READ_SMS),
-                PERMISSION_REQUEST_CODE
-            )
+        // check permission first
+        val hasSmsPermission = ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.READ_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasSmsPermission) {
+            loadSms()
         } else {
-            loadSms(smsAdapter)
+            requestSmsPermission.launch(Manifest.permission.READ_SMS)
         }
 
         return root
     }
 
-    private fun loadSms(adapter: SmsAdapter) {
+    private fun loadSms() {
         val groupedSms = getSmsMessages().map { (mobile, messages) ->
             val lastMessage = messages.firstOrNull()?.first ?: ""
             val lastTimestamp = messages.firstOrNull()?.second ?: 0L
@@ -82,53 +90,43 @@ class TransformFragment : Fragment() {
         if (groupedSms.isEmpty()) {
             Toast.makeText(requireContext(), "No SMS found", Toast.LENGTH_SHORT).show()
         }
-        adapter.submitList(groupedSms)
+        smsAdapter.submitList(groupedSms)
     }
 
     // Returns a map of mobile -> list of message pairs (body, timestamp)
     private fun getSmsMessages(): Map<String, List<Pair<String, Long>>> {
         val smsMap = mutableMapOf<String, MutableList<Pair<String, Long>>>()
-        val cursor = requireContext().contentResolver.query(
-            Uri.parse("content://sms/inbox"),
-            arrayOf("address", "body", "date"),
-            null,
-            null,
-            "date DESC"
-        )
 
-        cursor?.use {
-            while (it.moveToNext()) {
-                val address = it.getString(it.getColumnIndexOrThrow("address"))
-                val body = it.getString(it.getColumnIndexOrThrow("body"))
-                val date = it.getLong(it.getColumnIndexOrThrow("date"))
+        try {
+            val cursor = requireContext().contentResolver.query(
+                Uri.parse("content://sms/inbox"),
+                arrayOf("address", "body", "date"),
+                null,
+                null,
+                "date DESC"
+            )
 
-                val list = smsMap.getOrPut(address) { mutableListOf() }
-                list.add(body to date)
-            }
-        }
-        return smsMap
-    }
+            cursor?.use {
+                Log.d("SMS_TEST", "Inbox count = ${it.count}")
+                while (it.moveToNext()) {
+                    val address = it.getString(it.getColumnIndexOrThrow("address"))
+                    val body = it.getString(it.getColumnIndexOrThrow("body"))
+                    val date = it.getLong(it.getColumnIndexOrThrow("date"))
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                val recyclerView = binding.recyclerviewTransform
-                val smsAdapter = SmsAdapter { smsGroup ->
-                    val intent = Intent(requireContext(), SmsDetailActivity::class.java)
-                    intent.putExtra("mobile", smsGroup.mobile)
-                    startActivity(intent)
+                    val list = smsMap.getOrPut(address) { mutableListOf() }
+                    list.add(body to date)
                 }
-                recyclerView.adapter = smsAdapter
-                loadSms(smsAdapter)
-            } else {
-                Toast.makeText(requireContext(), "Permission denied", Toast.LENGTH_SHORT).show()
             }
+        } catch (e: SecurityException) {
+            // happens if OS still blocks SMS even with permission
+            Log.e("SMS_TEST", "SecurityException when reading SMS: ${e.message}", e)
+            Toast.makeText(requireContext(), "Cannot read SMS on this device", Toast.LENGTH_LONG)
+                .show()
+        } catch (e: Exception) {
+            Log.e("SMS_TEST", "Unexpected error when reading SMS: ${e.message}", e)
         }
+
+        return smsMap
     }
 
     override fun onDestroyView() {
@@ -171,7 +169,6 @@ class TransformFragment : Fragment() {
             val timestamp = smsGroup.lastTimestamp
             val messageCount = smsGroup.messageCount
 
-            // format timestamp to "time ago"
             val time = if (timestamp != 0L) {
                 val now = System.currentTimeMillis()
                 val diff = now - timestamp
@@ -196,7 +193,6 @@ class TransformFragment : Fragment() {
             holder.messageText.text = lastMessage
             holder.timeText.text = time
 
-            // 👇 handle click on the whole card
             holder.itemView.setOnClickListener {
                 onItemClick(smsGroup)
             }
